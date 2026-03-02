@@ -11,6 +11,27 @@
   - `DataRuns`（高速路径）
   - `RecordIoctlFallback`（兼容回退路径）
 
+## 效果展示
+
+<p align="center">
+  <img src="docs/assets/demo.gif" alt="SpaceScanner Demo" width="920" />
+</p>
+
+<table>
+  <tr>
+    <td align="center" width="50%">
+      <img src="docs/assets/ui-overview.png" alt="UI Overview" />
+      <br />
+      <sub><b>主界面</b></sub>
+    </td>
+    <td align="center" width="50%">
+      <img src="docs/assets/scan-result.png" alt="Scan Result" />
+      <br />
+      <sub><b>扫描结果</b></sub>
+    </td>
+  </tr>
+</table>
+
 ## 环境要求
 
 - Windows 10/11
@@ -25,12 +46,17 @@
 在仓库根目录执行：
 
 ```powershell
-.\build.ps1 -Configuration Release -Platform x64
+.\publish.ps1 -Configuration Release -Runtime win-x64 -Deployment framework-dependent
 ```
 
-输出文件：
+输出目录：
 
-`SpaceScannerUI\bin\Release\net8.0-windows\spacescanner.exe`
+`SpaceScannerUI\publish\win-x64\`
+
+说明：
+
+- `framework-dependent`：不打包 runtime，默认输出单文件 exe；目标机器需已安装 .NET Desktop Runtime 8。
+- `self-contained`：打包 runtime，输出单文件 exe，体积会明显增大；目标机器无需预装 .NET。
 
 ## 在 Visual Studio 构建
 
@@ -62,5 +88,5 @@
 ├─ MftEngine/                 # C++ 扫描引擎
 ├─ SpaceScannerUI/            # WPF 可视化界面
 ├─ SpacescannerPro.sln        # 解决方案
-└─ build.ps1                  # 一键构建脚本
+└─ build.ps1                  # 构建脚本
 ```
