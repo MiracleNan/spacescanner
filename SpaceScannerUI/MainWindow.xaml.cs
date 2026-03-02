@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
@@ -18,7 +19,7 @@ namespace MftScanner
         private const int DefaultMaxDepth = 4;
         private const string CppEngineName = "MftEngine.exe";
         private const string TempResultFile = "scan_result.dat";
-        private HashSet<FileNode> _expandedNodes = new HashSet<FileNode>();
+        private readonly HashSet<FileNode> _expandedNodes = new HashSet<FileNode>();
 
         // 【双击检测变量】
         private long _lastClickTicks = 0;
@@ -44,13 +45,20 @@ namespace MftScanner
         // --- 核心功能：释放引擎 ---
         private string ExtractEngine()
         {
-            string destPath = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "MftEngine_v1.exe");
-            if (File.Exists(destPath)) return destPath;
+            string extractDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "SpaceScanner");
+            Directory.CreateDirectory(extractDir);
+            string destPath = System.IO.Path.Combine(extractDir, CppEngineName);
 
             try
             {
                 var assembly = System.Reflection.Assembly.GetExecutingAssembly();
-                string resourceName = "spacescanner.MftEngine.exe"; // 确保命名空间正确
+                string resourceName = $"{assembly.GetName().Name}.MftEngine.exe";
+                if (!assembly.GetManifestResourceNames().Contains(resourceName))
+                {
+                    resourceName = assembly.GetManifestResourceNames()
+                        .FirstOrDefault(n => n.EndsWith(".MftEngine.exe", StringComparison.OrdinalIgnoreCase))
+                        ?? resourceName;
+                }
 
                 using (Stream? stream = assembly.GetManifestResourceStream(resourceName))
                 {
@@ -69,7 +77,7 @@ namespace MftScanner
             return destPath;
         }
 
-        private void RunCppEngine(string exePath, string drive, string outputPath)
+        private string RunCppEngine(string exePath, string drive, string outputPath)
         {
             var startInfo = new ProcessStartInfo
             {
@@ -77,13 +85,23 @@ namespace MftScanner
                 Arguments = $"{drive} \"{outputPath}\"",
                 UseShellExecute = false,
                 CreateNoWindow = true,
-                RedirectStandardOutput = true
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                StandardOutputEncoding = Encoding.UTF8,
+                StandardErrorEncoding = Encoding.UTF8
             };
             using (var process = Process.Start(startInfo))
             {
                 if (process == null) throw new Exception("无法启动引擎");
-                process.WaitForExit();
-                if (process.ExitCode != 0) throw new Exception($"扫描引擎异常退出 (Code: {process.ExitCode})");
+                string stdout = process.StandardOutput.ReadToEnd();
+                string stderr = process.StandardError.ReadToEnd();
+                if (!process.WaitForExit(10 * 60 * 1000))
+                {
+                    process.Kill(true);
+                    throw new Exception("扫描超时（超过 10 分钟）");
+                }
+                if (process.ExitCode != 0) throw new Exception($"扫描引擎异常退出 (Code: {process.ExitCode})\n{stderr}\n{stdout}");
+                return stdout;
             }
         }
 
@@ -101,10 +119,14 @@ namespace MftScanner
             TreemapCanvas.Children.Clear();
 
             var sw = Stopwatch.StartNew();
+            string tempFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), TempResultFile);
+            string engineOutput = "";
             try
             {
-                string tempFile = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "scan_result.dat");
-                await Task.Run(() => RunCppEngine(enginePath, selectedDrive, tempFile));
+                if (File.Exists(tempFile)) File.Delete(tempFile);
+                engineOutput = await Task.Run(() => RunCppEngine(enginePath, selectedDrive, tempFile));
+                if (!File.Exists(tempFile))
+                    throw new Exception("扫描结果文件未生成，请确认以管理员权限运行。");
 
                 StatusText.Text = "正在解析数据...";
                 var roots = await Task.Run(() => MftParser.Parse(tempFile));
@@ -117,18 +139,26 @@ namespace MftScanner
                 {
                     _currentRoots = new List<FileNode> { rootNode };
                     _expandedNodes.Clear();
-                    string safeName = string.IsNullOrEmpty(rootNode.Name) ? selectedDrive : rootNode.Name;
-                    StatusText.Text = $"分析完毕 | 耗时: {sw.Elapsed.TotalSeconds:F2}s | 已用空间: {FormatSize(rootNode.Size)}";
+                    string engineMode = "Unknown";
+                    if (engineOutput.Contains("[Mode] DataRuns", StringComparison.OrdinalIgnoreCase))
+                        engineMode = "DataRuns";
+                    else if (engineOutput.Contains("[Mode] RecordIoctlFallback", StringComparison.OrdinalIgnoreCase))
+                        engineMode = "RecordIoctlFallback";
+
+                    StatusText.Text = $"分析完毕 | 模式: {engineMode} | 耗时: {sw.Elapsed.TotalSeconds:F2}s | 已用空间: {FormatSize(rootNode.Size)}";
                     DrawTreemap();
                 }
                 else
                 {
                     StatusText.Text = "未找到有效数据";
                 }
-                if (File.Exists(tempFile)) File.Delete(tempFile);
             }
             catch (Exception ex) { MessageBox.Show(ex.Message); StatusText.Text = "失败"; }
-            finally { BtnAnalyze.IsEnabled = true; }
+            finally
+            {
+                if (File.Exists(tempFile)) File.Delete(tempFile);
+                BtnAnalyze.IsEnabled = true;
+            }
         }
 
         private void TreemapCanvas_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -180,7 +210,7 @@ namespace MftScanner
             if (rect.Width < 2 || rect.Height < 2) return;
 
             bool isExpanded = depth < DefaultMaxDepth || _expandedNodes.Contains(node);
-            bool isContainer = node.IsDirectory && node.Children != null && node.Children.Count > 0 && isExpanded;
+            bool isContainer = node.IsDirectory && node.Children.Count > 0 && isExpanded;
 
             var border = new Border
             {

@@ -2,7 +2,7 @@
 using System.Data;
 using System.Windows;
 
-namespace MTFUI
+namespace MftScanner
 {
     /// <summary>
     /// Interaction logic for App.xaml

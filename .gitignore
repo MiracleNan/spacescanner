@@ -2,34 +2,45 @@
 .vs/
 *.user
 *.suo
+*.userosscache
+*.sln.docstates
 
-# Build results
+# Build output
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
 [Dd]ebug/
-[Dd]ebugPublic/
 [Rr]elease/
-[Rr]eleases/
 x64/
 x86/
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/
-bld/
-[Bb]in/
-[Oo]bj/
-[Oo]ut/
 [Tt]est[Rr]esult*/
 
-# C# / WPF
-*.appx
-*.appxupload
-*.msix
-*.msixupload
-*.dat
-scan_result.dat
-
-# Executables & Binaries
-*.exe
-*.dll
+# MSBuild / C++ artifacts
+*.ipch
 *.pdb
 *.ilk
+*.iobj
+*.ipdb
+*.tlog
+*.lastbuildstate
 *.cache
-*.lib
+*.log
+
+# NuGet / .NET local files
+packages/
+*.nupkg
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# Local runtime scan temp files (if generated inside repo)
+scan_result.dat
+scan_result_*.dat
+mft_dump.bin
+
+# Generated engine binary copied for embedding
+SpaceScannerUI/MftEngine.exe
+SpaceScannerUI/MftEngine.pdb
+SpaceScannerUI/MftEngine.lib
